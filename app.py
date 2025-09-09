@@ -3,8 +3,8 @@
 #this program will replace text in all .txt files in a directory /documents/1
 import os 
 cwd = os.getcwd() 
-os.chdir('../') 
-os.chdir('/home/rarmada/Documents/Python/documents/1') 
+#os.chdir('../') 
+#os.chdir('/home/rarmada/Documents/Python/documents/1') 
 def current_path():
     return os.getcwd()
 dirlist = os.listdir(current_path())
@@ -31,7 +31,7 @@ def hasfiles(cname, cname2):
 
 def startprogram():
     print("Starting program...")
-    print("this program will replace the name of the company in all .txt files in the directory documents/1")
+    print("this program will replace the name of the company in all .txt files in the directory of the file")
     if dirlist:
         print("Choose name to search:")
         cname = input()
