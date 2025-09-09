@@ -1,0 +1,6 @@
+#name = "rafael"
+#schools = []
+#schools.append("Escola A")
+#grades = [9.5, 8.0, 7.5] * 3
+#print(grades)
+#print(f"Nome: {name} is enrolled in {len(schools)} schools.")
