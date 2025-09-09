@@ -1,2 +1,2 @@
 # python-file-content-renamer
-change a word across file with another
+Project 1 -> change a word across file with another
