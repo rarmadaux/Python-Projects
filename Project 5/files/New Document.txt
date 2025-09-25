@@ -1,0 +1,54 @@
+#Mini PC Server 
+
+    tailscale running
+
+    pi hole http://192.168.1.201/admin/
+        
+
+   
+
+#Big PC
+    Proxmox
+        root 
+        prox9730
+    
+    Truenas http://192.168.1.239/
+        truenas_admin
+        9730
+
+        SMB Users
+            rarmada
+            9730
+    Jellyfin  203
+        rarmada
+        9730
+
+
+
+
+##Home IPS
+Rafael Z Fold:192.168.1.181
+Iphone Sara 192.168.1.182
+	
+
+##Fedora PC
+    sudo unetbootin
+
+    #Ollama AI local
+        Start: docker start ollama
+        Start chatting: docker exec -it ollama ollama run mistral
+
+        Stop: docker stop ollama
+
+        check for containers: docker ps
+
+
+
+
+
+sudo mount -t cifs -o username=rarmada,password=9730,vers=3.0 //192.168.1.239/Media /mnt/jellyfin_media
+sudo umount /mnt/jellyfin_media
+sudo mount -t cifs -o username=rarmada,password=123,vers=3.0,uid=1000,gid=1000 //192.168.1.239/Media /mnt/jellyfin_media
+
+    
+
