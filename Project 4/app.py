@@ -166,7 +166,7 @@ def sshconnect():
 
     return sftp_client, ssh_client
 
-def createuserserver():
+def SSH_connect_user_old():
     
     load_dotenv(dotenv_path=current_path() / ".env")  # still use hostname/port from .env
 
