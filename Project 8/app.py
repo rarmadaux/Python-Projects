@@ -2,7 +2,8 @@ from flask import Flask, request, jsonify, render_template
 import subprocess
 import platform
 import importlib
-import os
+import os, json
+
 
 # --- Detect OS ----------------------------------------------------
 os_name = platform.system().lower()
@@ -14,7 +15,7 @@ if os_name == "linux":
 elif os_name == "windows":
     audio_module = importlib.import_module("audio_windows")
 else:
-    raise SystemExit("❌ Unsupported OS — only Linux and Windows supported.")
+    raise SystemExit(" Unsupported OS — only Linux and Windows supported.")
 
 # --- Flask App ----------------------------------------------------
 app = Flask(__name__, template_folder="templates")
@@ -28,6 +29,21 @@ def list_audio_apps():
     apps = audio_module.get_active_audio_apps()
     return jsonify(apps)
 
+@app.route("/list_available_apps")
+def list_available_apps():
+    """Return all apps configured in apps.json for the web interface."""
+    import json, os
+
+    config_path = os.path.join("config", "apps.json")
+    if os.path.exists(config_path):
+        with open(config_path, "r") as f:
+            app_map = json.load(f)
+        # Return as a simple list of app names
+        return jsonify(list(app_map.keys()))
+    else:
+        return jsonify([])
+
+
 @app.route("/open_app", methods=["POST"])
 def open_app():
     data = request.get_json()
@@ -38,34 +54,21 @@ def open_app():
 
     try:
         if os_name == "windows":
-            app_map = {
-                "firefox": r"C:\Program Files\Mozilla Firefox\firefox.exe",
-                "thunderbird": r"C:\Program Files\Mozilla Thunderbird\thunderbird.exe",
-                "discord": r"C:\Users\%USERNAME%\AppData\Local\Discord\Update.exe",
-                "explorer": "explorer.exe",
-                "notepad": "notepad.exe",
-                "edge": r"C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe",
-            }
-
-            key = app_name.lower().split()[0]
-            target = app_map.get(key, app_name)
-            target = os.path.expandvars(target)
-
-            print(f"→ Trying to open: {target}")
-
-            if os.path.exists(target):
-                os.startfile(target)
+            # If it's a known executable path
+            if os.path.exists(app_name):
+                subprocess.Popen(app_name, shell=True)
             else:
-                subprocess.Popen(target, shell=True)
-
+                # Try launching by name using start command
+                subprocess.Popen(["cmd", "/c", "start", "", app_name], shell=True)
         else:
-            subprocess.Popen(app_name.split(), stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            # Linux / Mac
+            subprocess.Popen(app_name, shell=True)
 
-        print(f"✅ Launched {app_name}")
+        print(f"✅ Opened app: {app_name}")
         return jsonify({"status": "ok", "message": f"Opened {app_name}"}), 200
 
     except Exception as e:
-        print(f"❌ Failed to open {app_name}: {e}")
+        print(f"[ERROR] Failed to open app: {e}")
         return jsonify({"error": str(e)}), 500
 
 @app.route("/set_volume", methods=["POST"])

@@ -242,20 +242,7 @@
 
     <div id="launcher-tab" class="tab-content">
       <h2>App Launcher</h2>
-      <div id="launcher-grid">
-        <div class="launch-box" onclick="openApp('firefox')">
-          <img src="https://cdn.jsdelivr.net/gh/simple-icons/simple-icons/icons/firefox.svg">
-          <div class="launch-name">Firefox</div>
-        </div>
-        <div class="launch-box" onclick="openApp('thunderbird')">
-          <img src="https://cdn.jsdelivr.net/gh/simple-icons/simple-icons/icons/thunderbird.svg">
-          <div class="launch-name">Thunderbird</div>
-        </div>
-        <div class="launch-box" onclick="openApp('flatpak run com.discordapp.Discord')">
-          <img src="https://cdn.jsdelivr.net/gh/simple-icons/simple-icons/icons/discord.svg">
-          <div class="launch-name">Discord</div>
-        </div>
-      </div>
+      <div id="launcher-grid"></div>
     </div>
 
     <div id="blocks-tab" class="tab-content">
@@ -349,6 +336,34 @@
     }
 
     loadApps();
+
+     async function loadAvailableApps() {
+      const res = await fetch('/list_available_apps');
+      const apps = await res.json();
+      const grid = document.getElementById('launcher-grid');
+      grid.innerHTML = '';
+
+      if (apps.length === 0) {
+        grid.innerHTML = '<p>No apps configured yet. Add them in the desktop app.</p>';
+        return;
+      }
+
+      for (const name of apps) {
+        const div = document.createElement('div');
+        div.className = 'launch-box';
+        div.onclick = () => openApp(name);
+
+        // Try to load icon automatically
+        div.innerHTML = `
+          <img src="https://cdn.jsdelivr.net/gh/simple-icons/simple-icons/icons/${name.toLowerCase()}.svg" onerror="this.style.display='none'">
+          <div class="launch-name">${name}</div>
+        `;
+        grid.appendChild(div);
+      }
+    }
+
+    // Call it when the page loads
+    loadAvailableApps();
   </script>
 </body>
 </html>
