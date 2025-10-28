@@ -52,19 +52,27 @@ def open_app():
     if not app_name:
         return jsonify({"error": "No app specified"}), 400
 
+    # Optional: resolve from apps.json if it exists
+    config_path = os.path.join("config", "apps.json")
+    if os.path.exists(config_path):
+        with open(config_path, "r") as f:
+            apps = json.load(f)
+        if app_name in apps:
+            app_name = apps[app_name]
+
     try:
         if os_name == "windows":
-            # If it's a known executable path
             if os.path.exists(app_name):
-                subprocess.Popen(app_name, shell=True)
+                # Use list form (no shell) for full paths
+                subprocess.Popen([app_name], shell=False)
             else:
-                # Try launching by name using start command
+                # Fallback to "start" for PATH commands
                 subprocess.Popen(["cmd", "/c", "start", "", app_name], shell=True)
         else:
             # Linux / Mac
             subprocess.Popen(app_name, shell=True)
 
-        print(f"✅ Opened app: {app_name}")
+        print(f" Opened app: {app_name}")
         return jsonify({"status": "ok", "message": f"Opened {app_name}"}), 200
 
     except Exception as e:

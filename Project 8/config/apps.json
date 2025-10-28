@@ -1,4 +1,5 @@
 {
   "firefox": "C:/Program Files/Mozilla Firefox/firefox.exe",
-  "slack": "C:/Program Files/WindowsApps/com.tinyspeck.slackdesktop_4.46.104.0_x64__8yrtsj140pw4g/app/Slack.exe"
+  "slack": "C:/Program Files/WindowsApps/com.tinyspeck.slackdesktop_4.46.104.0_x64__8yrtsj140pw4g/app/Slack.exe",
+  "scrcpy": "C:/Users/Rafael/Downloads/1/scrcpy-win64-v3.3/scrcpy-win64-v3.3/scrcpy.exe"
 }
