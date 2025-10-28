@@ -6,6 +6,7 @@ import subprocess, threading, platform, queue, psutil
 
 CONFIG_FILE = os.path.join("config", "apps.json")
 APP_PATH = os.path.abspath("app.py")
+LINKS_FILE = os.path.join("config", "links.json")
 
 
 class PCControllerApp(ctk.CTk):
@@ -44,7 +45,9 @@ class PCControllerApp(ctk.CTk):
         ctk.CTkButton(btn_frame, text="💾 Save Config", command=self.save_config, width=120).grid(row=0, column=1, padx=10)
 
         # Start/Stop button
-        self.server_btn = ctk.CTkButton(btn_frame, text="▶ Start Server", command=self.start_server, width=150)
+        #self.server_btn = ctk.CTkButton(btn_frame, text="▶ Start Server", command=self.start_server, width=150)
+        self.server_btn = ctk.CTkButton(btn_frame, text="▶ Start Server", command=lambda: self.start_server(force=False), width=150)
+
         self.server_btn.grid(row=0, column=2, padx=10)
 
         # Scrollable App List
@@ -58,6 +61,27 @@ class PCControllerApp(ctk.CTk):
 
         # --- SETTINGS TAB ---
         ctk.CTkLabel(self.settings_tab, text="Future Settings Here", font=ctk.CTkFont(size=16)).pack(pady=30)
+
+        # --- LINKS TAB ---
+        self.links_tab = self.tabview.add("🌐 Links")
+        self.links_tab.grid_columnconfigure(0, weight=1)
+        self.links_tab.grid_rowconfigure(2, weight=1)
+
+        ctk.CTkLabel(
+            self.links_tab,
+            text="Configured Web Links",
+            font=ctk.CTkFont(size=18, weight="bold")
+        ).grid(row=0, column=0, pady=(10, 5))
+
+        links_btn_frame = ctk.CTkFrame(self.links_tab)
+        links_btn_frame.grid(row=1, column=0, pady=5)
+        ctk.CTkButton(links_btn_frame, text="➕ Add Link", command=self.add_link, width=120).grid(row=0, column=0, padx=10)
+        ctk.CTkButton(links_btn_frame, text="💾 Save Links", command=self.save_links, width=120).grid(row=0, column=1, padx=10)
+
+        self.links_frame = ctk.CTkScrollableFrame(self.links_tab, height=350, label_text="Links List")
+        self.links_frame.grid(row=2, column=0, sticky="nsew", padx=20, pady=10)
+
+        self.load_links()
 
         # Load Apps
         self.load_config()
@@ -132,10 +156,15 @@ class PCControllerApp(ctk.CTk):
             json.dump(data, f, indent=2)
 
     # --- Server Control ---
-    def start_server(self):
-        if self.is_server_running():
-            messagebox.showinfo("Server", "Server is already running!")
-            return
+    def start_server(self, force=False):
+        if self.is_server_running() and not force:
+            if messagebox.askyesno("Server Running", "A server seems to be running. Force restart?"):
+                self.start_server(force=True)
+            else:
+                return
+
+        if force:
+            self.kill_existing_servers()
 
         self.log_box.insert("end", "\n🚀 Starting server...\n")
         self.log_box.see("end")
@@ -145,23 +174,51 @@ class PCControllerApp(ctk.CTk):
         self.after(100, self.poll_log_queue)
         self.after(500, self.update_server_button)
 
+    def kill_existing_servers(self):
+        """Force kill all Python processes running *this* app.py file."""
+        killed = 0
+        app_path_norm = os.path.normcase(os.path.abspath(APP_PATH))
+
+        for proc in psutil.process_iter(['pid', 'cmdline']):
+            try:
+                cmdline = proc.info.get("cmdline") or []
+                if not isinstance(cmdline, (list, tuple)) or not cmdline:
+                    continue
+
+                cmd_str = " ".join(cmdline)
+                if os.path.normcase(app_path_norm) in os.path.normcase(cmd_str):
+                    if proc.is_running() and proc.status() not in (psutil.STATUS_ZOMBIE, psutil.STATUS_DEAD):
+                        proc.kill()
+                        killed += 1
+            except (psutil.NoSuchProcess, psutil.AccessDenied):
+                continue
+
+        if killed > 0:
+            self.log_box.insert("end", f"\n💀 Force killed {killed} existing server(s).\n")
+        else:
+            self.log_box.insert("end", "\n✅ No running servers found to kill.\n")
+        return killed
+
     def stop_server(self):
         if not self.is_server_running():
             messagebox.showinfo("Server", "No server is currently running.")
             return
 
         self.log_box.insert("end", "\n🛑 Stopping server...\n")
+
         try:
-            if hasattr(self.server_process, "terminate"):
-                self.server_process.terminate()
+            if platform.system().lower() == "windows":
+                # Kill only the specific PID (no /T flag to avoid parent kill)
+                subprocess.call(f"taskkill /F /PID {self.server_process.pid}", shell=True)
             else:
-                self.server_process.kill()
+                os.killpg(os.getpgid(self.server_process.pid), 9)
+
+            self.log_box.insert("end", "✅ Server stopped.\n")
         except Exception as e:
             self.log_box.insert("end", f"⚠️ Error stopping server: {e}\n")
 
         self.server_process = None
         self.update_server_button()
-        self.log_box.insert("end", "✅ Server stopped.\n")
 
     def update_server_button(self):
         if hasattr(self, "server_btn"):
@@ -185,18 +242,24 @@ class PCControllerApp(ctk.CTk):
 
     def run_flask_background(self):
         try:
-            flags = subprocess.CREATE_NO_WINDOW if platform.system().lower() == "windows" else 0
+            creationflags = 0
+            if platform.system().lower() == "windows":
+                # Fully detached console, invisible
+                creationflags = subprocess.CREATE_NEW_CONSOLE | subprocess.CREATE_NO_WINDOW
+
             self.server_process = subprocess.Popen(
                 ["python", "app.py"],
                 stdout=subprocess.PIPE,
                 stderr=subprocess.STDOUT,
                 text=True,
-                creationflags=flags
+                creationflags=creationflags
             )
+
             for line in iter(self.server_process.stdout.readline, ''):
                 if not line:
                     break
                 self.log_queue.put(line)
+
         except Exception as e:
             self.log_queue.put(f"❌ Error: {e}\n")
 
@@ -218,35 +281,47 @@ class PCControllerApp(ctk.CTk):
     def on_close(self):
         if self.is_server_running():
             try:
-                self.log_box.insert("end", "\n🛑 Stopping server before exit...\n")
-                if hasattr(self.server_process, "terminate"):
-                    self.server_process.terminate()
+                self.log_box.insert("end", "\n🛑 Cleaning up server before exit...\n")
+                if platform.system().lower() == "windows":
+                    subprocess.call(f"taskkill /F /T /PID {self.server_process.pid}", shell=True)
                 else:
-                    self.server_process.kill()
+                    os.killpg(os.getpgid(self.server_process.pid), 9)
             except Exception:
                 pass
         self.destroy()
 
+
     def check_existing_server(self):
-        """Detect Flask/app.py processes belonging to this project"""
+        """Detect if a Flask server from this project is already running."""
+        detected = False
+        app_path_norm = os.path.normcase(os.path.abspath(APP_PATH))
+
         for proc in psutil.process_iter(['pid', 'cmdline']):
             try:
                 cmdline = proc.info.get("cmdline") or []
-                if not isinstance(cmdline, (list, tuple)):
-                    continue  # Skip weird cases
+                if not isinstance(cmdline, (list, tuple)) or not cmdline:
+                    continue
 
-                cmd = " ".join(cmdline).lower()
-                if (
-                    "python" in cmd
-                    and "app.py" in cmd
-                    and os.path.dirname(APP_PATH).lower() in cmd
-                ):
-                    self.log_box.insert("end", f"\n⚠️ Found running server (PID: {proc.pid})\n")
-                    self.server_process = psutil.Process(proc.pid)
-                    self.update_server_button()
-                    return
+                cmd_str = " ".join(cmdline)
+                # Check for the exact app.py file path
+                if os.path.normcase(app_path_norm) in os.path.normcase(cmd_str):
+                    if proc.is_running() and proc.status() not in (psutil.STATUS_ZOMBIE, psutil.STATUS_DEAD):
+                        self.log_box.insert("end", f"\n⚠️ Found running server (PID: {proc.pid})\n")
+                        self.server_process = psutil.Process(proc.pid)
+                        detected = True
+                    else:
+                        # Clean up stale processes
+                        try:
+                            proc.kill()
+                            self.log_box.insert("end", f"\n💀 Killed stale server (PID: {proc.pid})\n")
+                        except Exception:
+                            pass
             except (psutil.NoSuchProcess, psutil.AccessDenied, psutil.ZombieProcess):
                 continue
+
+        if not detected:
+            self.server_process = None
+            self.log_box.insert("end", "\n✅ No running servers detected.\n")
 
         self.update_server_button()
 
@@ -263,6 +338,73 @@ class PCControllerApp(ctk.CTk):
             except psutil.NoSuchProcess:
                 return False
         return False
+
+    # --- Links Management ---
+    def load_links(self):
+        for widget in self.links_frame.winfo_children():
+            widget.destroy()
+
+        links = self.get_links()
+        if not links:
+            ctk.CTkLabel(self.links_frame, text="No links added yet.", text_color="gray").pack(pady=10)
+            return
+
+        for name, url in links.items():
+            row = ctk.CTkFrame(self.links_frame)
+            row.pack(fill="x", pady=5, padx=5)
+            ctk.CTkLabel(row, text=name, font=ctk.CTkFont(size=13, weight="bold")).pack(side="left", padx=10)
+            ctk.CTkLabel(row, text=url, text_color="#aaa").pack(side="left", padx=10, expand=True)
+            ctk.CTkButton(row, text="❌", width=40, fg_color="#8b0000", hover_color="#a50000",
+                        command=lambda n=name: self.remove_link(n)).pack(side="right", padx=10)
+
+    def add_link(self):
+        top = ctk.CTkToplevel(self)
+        top.title("Add Web Link")
+        top.geometry("400x200")
+
+        ctk.CTkLabel(top, text="Title:").pack(pady=5)
+        name_entry = ctk.CTkEntry(top, width=300)
+        name_entry.pack()
+
+        ctk.CTkLabel(top, text="URL:").pack(pady=5)
+        url_entry = ctk.CTkEntry(top, width=300)
+        url_entry.pack()
+
+        def save():
+            name, url = name_entry.get().strip(), url_entry.get().strip()
+            if not name or not url:
+                messagebox.showwarning("Warning", "Please fill both fields.")
+                return
+            if not url.startswith(("http://", "https://")):
+                url = "https://" + url
+            data = self.get_links()
+            data[name] = url
+            self.save_links_to_file(data)
+            self.load_links()
+            top.destroy()
+
+        ctk.CTkButton(top, text="Add", command=save).pack(pady=15)
+
+    def remove_link(self, name):
+        data = self.get_links()
+        if name in data:
+            del data[name]
+            self.save_links_to_file(data)
+            self.load_links()
+
+    def save_links(self):
+        messagebox.showinfo("Saved", "Links saved successfully!")
+
+    def get_links(self):
+        if os.path.exists(LINKS_FILE):
+            with open(LINKS_FILE, "r") as f:
+                return json.load(f)
+        return {}
+
+    def save_links_to_file(self, data):
+        os.makedirs(os.path.dirname(LINKS_FILE), exist_ok=True)
+        with open(LINKS_FILE, "w") as f:
+            json.dump(data, f, indent=2)
 
 
 if __name__ == "__main__":
